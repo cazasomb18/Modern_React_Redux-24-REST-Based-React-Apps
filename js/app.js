@@ -673,6 +673,312 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //Associating Streams with Users
 
+	//GOAL: we want to show some 'EDIT' 'DELETE' buttons on each stream that USER created
+
+	//good tie in for fetchingstreams and authentication
+
+	//we need to attach a user id to the streams that get created
+		//when we create a stream object we need to attach a userId prop to that object
+			//we'll get the userId from auth piece of state
+
+	//actions/index.js:
+		export const createStream = formValues => async dispatch => {
+	 	const response = await streams.post('/streams', formValues);
+			//want to take formValues{} and user's userId and post it to our streams endpoint
+	 	dispatch({ type: CREATE_STREAM, payload: response.data });
+	};
+
+	//We need to get userId, inside of our ActionCreator (createStream)
+	//When we return a function from an AC, the 
+		//function gets automatically gets called w/ ReduxThunk w/ 2 arguments:
+			//1st arg: dispatch funciton
+			//2nd arg: getState function
+				//--> allows us to reach into ReduxSTore and pull out some function
+
+	//src/actions/index.js:
+	export const createStream = formValues => async (dispatch, getState) => {
+		const { userId } = getState().auth;
+		//extract our userId from redux store auth object:
+	 	const response = await streams.post('/streams', { ...formValues, userId });
+											//new {} w/ all formValues adding userId as a prop
+	 	dispatch({ type: CREATE_STREAM, payload: response.data });
+	};
+
+	//Now navigate to 'localhost:3000/streams/new' in browser console, fill in fields:
+		//we just created a new stream with a new key 'userId: 23409785409230'
+
+	//Next we'll use the userId to determine whether or not we render the 'EDIT'/'DELETE' buttons
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//Conditionally Showing Edit and Delete
+
+	//GOAL: use the userId to determine whether or not we render the 'EDIT'/'DELETE' buttons
+
+	//StreamList.js:
+		const mapStateToProps = state => {
+			return {
+				streams:  Object.values(state.streams),
+				currentUserId: state.auth.userId //storing currentUserId in state from auth{}
+			};
+		}
+
+	//now above renderList(){}, let's add a helper method to make the code easier to read, and keep it away
+	//from this already complicated mapping function:
+		renderAdmin(stream){
+			if (stream.userId === this.props.currentUserId) {//this stream's userId === currentUserId
+				return <div>EDIT/DELETE</div>;//render div w/ edit/delete
+			}
+		}
+
+	//Now let's call this in renderList(){} method:
+		renderList(){
+			return this.props.streams.map(stream => {
+				return (
+					<div className="item" key={stream.id}>
+						<i className="large middle aligned icon camera" />
+						<div className="content">
+						{stream.title}
+							<div className="description">{stream.description}</div>
+						</div>
+						{this.renderAdmin(stream)}
+						{/*call renderAdmin helper method to render edit/del div*/}
+					</div>
+				);
+			})
+		};
+
+	//Let's add a little bit of styling now:
+		renderAdmin(){
+			if (stream.userId === this.props.currentUserId) {
+				return (
+					<div className="right floated content">
+						<button className="ui button primary">EDIT</button>
+						<button className="ui button negative">DELETE</button>
+								{/*"negative" renders button in red as warning to users*/}
+					</div>
+				);
+			}
+		}
+		renderList(){
+			return this.props.streams.map(stream => {
+				return (
+					<div className="item" key={stream.id}>
+						{this.renderAdmin(stream)}
+						{/*this has to be here for semantic ui styling to work*/}
+						<i className="large middle aligned icon camera" />
+						<div className="content">
+						{stream.title}
+							<div className="description">{stream.description}</div>
+						</div>
+					</div>
+				);
+			})
+		}
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//Linking to Stream Creation
+
+	//We need to make sure IF user's logged in we show a button 'CreateStream'
+		//need to set up to nav to CreateStream.js page:
+
+	//StreamList.js:
+		//import <Link/>:
+			import { Link } from 'react-router-dom';
+		//add isSignedIn from app level state to component level state in mapStateToProps:
+			const mapStateToProps = state => {
+				return {
+					streams:  Object.values(state.streams),
+					currentUserId: state.auth.userId,
+					isSignedIn: state.auth.isSignedIn
+				};
+			}
+		//create new helper method to render 'Create Stream' button:
+			renderCreate(){
+				if (this.props.isSignedIn) {
+					return (
+						<div style={{ textAlign: right }}>
+							{/*inline styline: alligns text to right*/}
+							<Link to="/streams/new" className="ui button primary">
+							{/*links to '/streams/new <CreateStream/>*/}
+							Create Stream
+							</Link>
+						</div>
+					);
+				}
+			}
+		//now call this method in render():
+			render(){
+				return (
+					<div>
+						<h2>Streams</h2>
+						<div className="ui celled list">{this.renderList()}</div>
+						{this.renderCreate()}
+						{/*calls helper method we just defined after the list*/}
+					</div>
+				); 
+			};
+			//We're now rendering a link to <CreateStream/> based upon whether or not user is signed in
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//When to Navigate to Users
+
+	//So now when we Create a Stream we want to be automatically navigated back to the streams list index:
+
+	//So far we've been navigating from component to component
+		//Intentional Navigation: user clicks on a 'Link' component
+
+	//Now we'll do this run code in response to some type of event, that will change the page user sees
+		//Programmatic Navigation: We run code to forcibly navigate the user through our app
+
+	//When, exactly do we want to navigate the user around?
+		//We want to navigate the user away AFTER we can an API response, like this:
+
+			//User Submits form
+			//We make a req to backend api to create the stream
+			//...Time passes...
+			//API responds with success or error
+			//We either show error to the user or navigate them back to list of streams
+
+	//src/actions/index.js: navigate AFTER we dispatch our action:
+		export const createStream = formValues => async (dispatch, getState) => {
+			const { userId } = getState().auth;
+		 	const response = await streams.post('/streams', { ...formValues, userId });
+		 	dispatch({ type: CREATE_STREAM, payload: response.data });
+		 	//Do some programmatic navigation to get the user back to the root list of streams
+		};
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//History References
+	
+	//This type of programmatic navigation with react router is NOT going to be easy
+
+	//history object: keep track of the address back in your browser
+		//this is hard b/c this is created by the browser router, b/c the code we have to write
+		//to get a reference to this browser object is challenging
+
+	//But why is it challenging to write code to reference the history browser router object?
+		//component could 'easily trigger navigation inside of it'
+			//but we're not doing navigation from a component, we're getting it from an ACTION CREATOR
+
+	//One simple Solution:
+		//get history object from BrowserRouter
+			//Browser Router communicates history down to component
+				//could say: anytime component calls action creator component should pass along the
+				//history object into the action creator
+					//inside action creator: we'd also accept a history object
+						//this is a pain b/c everytime we'd want to navigate we'd have to write our
+						//Ac to include all of this stuff
+		//--> we'll use an alternative solution:
+
+	//BrowserRouter creates 'history' object, b/c it internally maintains it internally it's hard to access
+
+	//OUR SOLUTION: we will create the 'history' object, we'll create it inside of a dedicated file
+		//we'll import this very easily b/c we didn't allow React-Router to create it
+			//We'll create a history {} to whatever is the corresponding type to whatever router we created
+				//history object will look at everything after the domain to decide waht content to show
+				//b/c we're creating our own history we're using a generic Router
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/*In the next lecture we are going to be creating our history object. As of React Router DOM v4.4.0 
+you will get a warning in your console:
+
+Warning: Please use `require("history").createBrowserHistory` 
+instead of `require("history/createBrowserHistory")`. Support for the latter will be removed in the 
+next major release.
+
+To fix, our history.js file should instead look like this:
+
+import { createBrowserHistory } from 'history'; 
+export default createBrowserHistory();
+*/
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//Creating a Browser History Object
+
+	//in src create history.js:
+		import { createBrowserHistory } from 'history';//automatically loaded with React-Browser-Router lib
+		export default createBrowserHistory();//creates browser history object
+			//AND THAT'S IT!
+
+	//Now let's create a plain router instead of a browser router:
+	//App.js:
+		import { Router, Route } from 'react-router-dom'; //import Router instead of BrowserRouter
+		import history from '../history'; //import history object we just created
+		const App = () => {
+			return (
+				<div className='ui container'>
+					<Router history={history}>
+							{/*adds history object as 'history' prop to top logic*/}
+						<div>
+							<Header />
+							<Route path="/" exact component={StreamList} />
+						</div>
+					</Router>
+				</div>
+			);
+		};
+		//now with this we can trigger programmatic nav
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//Implementing Programmatic Navigation
+
+	//src/actions/index.js:
+		import history from '../history';
+		export const createStream = formValues => async (dispatch, getState) => {
+			const { userId } = getState().auth;
+		 	const response = await streams.post('/streams', { ...formValues, userId });
+		 	dispatch({ type: CREATE_STREAM, payload: response.data });
+		 	history.push('/');//navigates us to root: localhost:3000/
+		};
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//Manually Changing API Records
+
+	//Over time you may want to delete a bunch of data without having to manually delete, here's how
+	//we do this:
+
+	//in code editor go to api/db.json:
+		//delete any records you don't want!
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//URL-Based Selection
+
+	
+
+
+
+
+
+
 
 
 
