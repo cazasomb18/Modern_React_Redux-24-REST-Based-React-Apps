@@ -972,27 +972,457 @@ export default createBrowserHistory();
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //URL-Based Selection
 
+	//We're going talk about how a user can get to the EditStream page, and what stream, they're
+	//trying to edit:
+
+	 //When we show index page: we'll show delete edit button next to user-created streams:
+	 	//when they click 'edit':
+	 		//--> will be navigated to edit page
+	 			//we'll ahve to communicate which edit button user clicked to edit page:
+
+	 //2 approaches to this:
+	 	//1 - Selection Reducer - when a user clicks on a stream to edit it, use a 'selectionReducer'
+	 		//to record what stream is being edited
+	 	//2 - URL-Based Selection - Put the ID of the stream being edited in the URL
+	 		//we'll have to change our route pathes just a little bit
+
+	 //HERE'S WHAT OUR NEW PATHS WILL BE WITH URL-BASED SELECTION:
+
+	 	//PATH 									COMPONENT
+	 	// /			 		==>      			StreamList
+	 	// /streams/new 		==>      			StreamCreate
+	 	// /streams/edit/:id 	==>      			StreamEdit
+	 	// /streams/delete/:id 	==>      			StreamDelete
+	 	// /streams/:id			==>      			StreamShow
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//Wildcard Navigation
+
+	//To make use of url based navigation:
+		//1 - when clicked on edit: navigate to: 'streams/edit/:id'	
+		//2 - when navigate to 'streams/edit/:id' show <EditStream/>
+
+	//src/components/streams/StreamList.js:
+		renderAdmin(stream) {
+			if (stream.userId === this.props.currentUserId) {
+				return (
+					<div className="right floated content">
+						<Link to={`/streams/edit/${stream.id}`} className="ui button primary">Edit</Link>
+						<button className="ui button negative">DELETE</button>
+					</div>
+				);
+			}
+		}
+
+	//Now change the route in App.js:
+		<Route path="/streams/edit/:id" exact component={StreamEdit} />
+	//Now when we click the 'EDIT' button we navigate to StreamEdit component!
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//More on Route Params
+
+	//Next we need to communicate the id # to the component
+	//EditStream.js:
+		import React from 'react';
+
+		const StreamEdit = (props) => {
+			console.log(props);
+			return <div>StreamEdit</div>;
+		};
+
+		export default StreamEdit;
+
+	//in app browser console:
+		//props.match.params.id === '2'
+			//will always be === to whatever is after ':' in Route.path
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//Selecting Records from State
 	
+	//GOAL: print some info on the EditStream component so we know we have the right stream
+
+	//need 2 kinds of info:
+		//id of the stream (avail on props.match.parmas.id)
+		//list of streams inside our redux state object
+
+	//Get stream out of state store and render out some info, StreamEdit.js:
+		import React from 'react';
+		import { connect } from 'react-redux';
+		import editStream from '../../actions';
+
+		const StreamEdit = props => {
+			console.log(props);//props not available in mapStateToProps below...
+			return <div>StreamEdit</div>;
+		}
+
+		const mapStateToProps = (state, ownProps) => {//remember this automatically gets called w/ ownProps
+			console.log(ownProps);//this is the same object as above ^^^^
+			return { stream: ownProps.match.params.id };//therefore we access the id w/ the same thing
+		}
+
+		export default connect(mapStateToProps)(StreamEdit);
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//Component Isolation with React Router
+	
+	//Here's our current issue: 	
+		//@ "http://localhost:3000/streams/edit/3" console.log(props) ==> stream: undefined
+		//however when we nagivate to root and select edit: console.log(props) ==> stream: streamdata
+			//why is this?
+
+	//React-Router Flow:
+		//User types in streams/edit/3 to address bar and hits enter
+		//User loads u our app
+		//Redux state object is empty!
+		//We try to select stream with id '3' from state
+		//No streams were loaded, so we get 'undefined'!
+		//We navigated to '/'
+		//StreamList fetches all ouf our streams, updates Redux state
+		//We nav back to '/streams/edit/3'
+		//We select stream with id of 3
+		//Data is now in redux store, so we see the appropriate stream
+
+	//With React-Router, each component needs to be designed to work insolation: fetch it's own data!
+		//needs to call Action Creator to reach to API to fetch data so it can show it on the screen
+
+	//Solution - call this.props.fetchStreams() in StreamsEdit?
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//Fetching a Stream for Edit Stream
+
+	//GOAL: each component needs to be designed to work insolation: fetch it's own data!
+	//In StreamEdit.js:
+		import React from 'react';
+		import { connect } from 'react-redux';
+
+		import fetchStream from '../../actions';
+		//import fetchStream action creator and pass off to connect
+
+		//Change to class-based component
+		class StreamEdit extends React.Component {
+			componentDidMount(){
+				this.props.fetchStream(this.props.match.params.id);
+				//call fetchStream(id) in cdm:
+			}
+			render(){
+				//conditional logic to render stream msg while stream loading
+				if (!this.props.stream) {
+					return <div>Loading...</div>;
+				}
+
+				return <div>{this.props.stream.title}</div>;
+			}
+		}
+
+		const mapStateToProps = (state, ownProps) => {
+			const id = ownProps.match.params.id;
+			return { stream: state.streams[id] };
+		};
+		//pass fetchStream 2nd in 1st connect() call
+		export default connect(mapStateToProps, { fetchStream })(StreamEdit);
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//Real Code Reuse!
+
+	//Look at WRs for Create and Edit forms... they're incredible similar:
+		//A few differences:
+			//Header is different
+			//Title and Description fields aren't empty, has previous values in it and is editable
+			//Need to call editStream AC
+
+	//We're going to REUSE A COMPONENTS between these two forms:
+		//We'll have three components:
+			//StreamCreate: will refactor these to incorporate this new component
+			//StreamEdit: will refactor these to incorporate this new component
+			//StreamForm: bulk of redux-form, renders text input will be inside of here
+
+	//Create src/components/streams/StreamForm.js:
+
+	//copy StreamCreate.js and paste into StreamForm.js:
+	//Component now looks like this:
+		import React from 'react';
+		import { Field, reduxForm } from 'redux-form';
+
+
+		class StreamForm extends React.Component{
+		//change classname to StreamForm
+			renderError({ error, touched }) {
+				if (touched && error) {
+					return (
+						<div className="ui error message">
+							<div className="error">{error}</div>
+						</div>
+					);
+				}
+			};
+			renderInput = ({ input, label, meta }) => {
+				const className = `field ${meta.error && meta.touched ? 'error' : ''}`;
+				return(
+					<div className={className}>
+						<label>{label}</label>
+						<input {...input} autoComplete="off" />
+						{this.renderError(meta)}
+					</div>
+				);
+			};
+			onSubmit = (formValues) => {
+				this.props.onSubmit(formValues);
+				//streamForm should attempt to call an onSubmit cb passed down props
+			};
+			render(){
+				return(
+					<div>
+						<form className="ui form error" onSubmit={this.props.handleSubmit(this.onSubmit)} 
+						>
+							<Field name="title" component={this.renderInput} label="Enter Title" />
+							<Field name="description" component={this.renderInput} label="Enter Description"/>
+							<button className="ui button primary">Submit</button>
+						</form>
+					</div>
+				)
+			};
+		};
+		const validate = (formValues) => {
+			const errors = {};
+			if (!formValues.title) {
+				errors.title = 'You must enter a title';
+			}
+			if (!formValues.description) {
+				errors.description = 'You must enter a description';
+			}
+			return errors;
+		};
+		//remove 2nd default export statement, make 1st const export default
+		export default reduxForm({
+			form: 'streamForm', 
+			//change '' associated w/ name of form to 'streamForm' (optional)
+			validate
+		})(StreamForm);//export this form state to StreamForm component
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//Refactoring StreamCreate.js
+
+	//We're going to refactor stream create to show an instance of StreamForm
+	//StreamCreate.js now looks like this:
+
+			//remove import for Field, reduxForm
+			import React from 'react';
+			import { connect } from 'react-redux';
+			import { createStream } from '../../actions';
+			import StreamForm from './StreamForm';
+			//import component
+			class StreamCreate extends React.Component {
+			//remove rendererror(){} & renderinput(){}
+				onSubmit = (formValues) => {
+					// console.log("about to createStream with formValues: \n", formValues);
+					this.props.createStream(formValues)
+				};
+				render(){
+					//return <StreamForm/> and Header
+					return(
+						<div>
+							<h3>Create a Stream:</h3>
+							<StreamForm onSubmit={this.onSubmit}/>
+							{/*pass in onSubmit funciton*/}
+						</div>
+					)
+				};
+			};
+			//delete validation (done by form)
+			//no form wrapping - delete (also done by form)
+			export default connect(
+				null,
+				{ createStream }
+			)(StreamCreate);//pass in this Component's name
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//Setting Initial Values
+
+	//When we pass props from StreamEdit down to StreamForm, we're technically passing props to reduxForm
+		//reduxform has som especial props that we can pass down to our Redux Form Wrapped component
+
+	//Stream Edit
+		//onSubmit
+		//initialValues for 'title' and 'description'
+			//if we use 'initialValues' will set values for 1st values for this instance specifically
+		//
+		//
+		//
+		//ReduxForm{
+			//StreamForm
+		//}
+
+	//in StreamEdit.js:
+	import React from 'react';
+	import { connect } from 'react-redux';
+
+	import { fetchStream, editStream } from '../../actions';
+	import StreamForm from './StreamForm';
+	//import editStream, StreamForm
+
+	class StreamEdit extends React.Component {
+		componentDidMount(){
+			this.props.fetchStream(this.props.match.params.id);
+		}
+
+		onSubmit = formValues => {
+			//onSubmit: for now just call w/ form values and console.log()
+			console.log("formValues in StreamEdit: ", formValues);
+		}
+
+		render(){
+			if (!this.props.stream) {
+				return <div>Loading...</div>;
+			}
+
+			return (
+				<div>
+					<h3>Edit Stream</h3>
+					<StreamForm 
+						//If we pass 'initialValues' from StreamEdit to StreamForm we'll pass in that record's values
+						initialValues={{ 
+							title: this.props.stream.title, 
+							description: this.props.stream.description 
+						}} 
+						onSubmit={this.onSubmit}
+					/>
+				</div>
+			); 
+		}
+	}
+
+	const mapStateToProps = (state, ownProps) => {
+		const id = ownProps.match.params.id;
+		return { stream: state.streams[id] };
+	};
+
+	export default connect(
+		mapStateToProps,
+	 	{ fetchStream, editStream }
+		//pass editStream into connect w/existing AC
+	)(StreamEdit);
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//Avoiding Changes to Properties
+
+	//Let's use lodash to set the initial values from props to current form render:
+	render(){
+		return (
+			<div>
+				<h3>Edit Stream</h3>
+				<StreamForm 
+					initialValues={_.pick(this.props.stream, 'title', 'description') } 
+					//_.pick(object, 'prop1', 'prop2') --> sets title and desc w/ initial values from 
+					//this.props.stream
+					onSubmit={this.onSubmit}
+				/>
+			</div>
+		);
+	}
+
+	//Example of the lodash _.pick() function:
+	const profile = {
+	  name: 'Sam',
+	  age: 18,
+	  favoriteColor: 'green'
+	};
+
+	_.pick(profile, 'name');
+	//returns new object: {"name":"Sam"}
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//Edit Form Submission
+	
+	//EditStream: we need to wire up the streamEdit AC to the onSubmit() method:
+
+	//Let's familiaze ourselves w/ the editStream AC:
+		export const editStream = (id, formValues) => async dispatch => {
+			//takes in args of form's ID, and new formValues
+		const response = await streams.put(`/streams/${id}`, formValues);
+		dispatch({ type: EDIT_STREAM, payload: response.data });
+	};
+
+	//EditStream.js
+		onSubmit = formValues => {
+			this.props.editStream(this.props.match.params.id, formValues);
+			//calling editStream(streamId, newFormValues)
+		}
+
+	//Actions/index.js: 
+		export const editStream = (id, formValues) => async dispatch => {
+			const response = await streams.put(`/streams/${id}`, formValues);
+			dispatch({ type: EDIT_STREAM, payload: response.data });
+			//need programmatic navigation to get the user back to the root list of streams
+			history.push('/');
+		};
+
+	//Ok so this works as expected... except... 
+		//when we return to StreamList we acn't see an edit/delete button on the stream we just edited
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//PUT vs PATCH Requests
+
+	//If we look in the posts request in network tab in app browser console:
+		//you'll see that there isn't a userId associated w/ the edited record/stream
+
+	//This is due RESTful conventions:
+		//Update ALL properties of a record 	PUT 	/streams/:id 	single record
+			//whatever properties you put in the body of that request will replace all the 
+			//properties that were originally included 
+				//took title, description, id, userId and replaced them w/ title + description
+					//one property that is immune to this is: id
+		//Update SOME properties of a record 	PATCH 	/streams/:id 	single record
+			//you're actually supposed to use this if you just want to update SOME properties
+
+	//Update action creator to include a patch request instead, in src/actions/index.js:
+		export const editStream = (id, formValues) => async dispatch => {
+			const response = await streams.patch(`/streams/${id}`, formValues);
+		};
+			//now when we edit we see the edit/delete buttons!
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 
